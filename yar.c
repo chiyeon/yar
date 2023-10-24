@@ -493,9 +493,50 @@ void editor_open(char * filename)
    E.dirty = 0;
 }
 
+char * editor_prompt(char * prompt)
+{
+   size_t bufsize = 128;
+   char * buf = malloc(bufsize);
+
+   size_t buflen = 0;
+   buf[0] = '\0';
+
+   for(;;) {
+      editor_set_status_message(prompt, buf);
+      editor_refresh_screen();
+
+      int c = editor_read_key();
+      if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+         if (buflen != 0) buf[--buflen] = '\0';
+      } else if (c == '\x1b') {
+         editor_set_status_message("");
+         free(buf);
+         return NULL;
+      } else if (c == '\r') {
+         if (buflen != 0) {
+            editor_set_status_message("");
+            return buf;
+         }
+      } else if (!iscntrl(c) && c < 128) {
+         if (buflen == bufsize - 1) {
+            bufsize *= 2;
+            buf = realloc(buf, bufsize);
+         }
+         buf[buflen++] = c;
+         buf[buflen] = '\0';
+      }
+   }
+}
+
 void editor_save()
 {
-   if (E.filename == NULL) return;
+   if (E.filename == NULL) {
+      E.filename = editor_prompt("Save as: %s (ESC to cancel)");
+      if (E.filename == NULL) {
+         editor_set_status_message("Save aborted");
+         return;
+      }
+   }
 
    int len;
    char * buf = editor_rows_to_string(&len);
