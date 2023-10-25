@@ -18,9 +18,10 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 #define YAR_VERSION "0.1"
-#define YAR_TAB_STOP 8
+#define YAR_TAB_STOP 3
 #define YAR_QUIT_TIMES 1
-#define YAR_SHOW_LINE_NUMBERS 1 
+#define YAR_SHOW_LINE_NUMBERS 0
+#define YAR_GENERATE_TABS_AS_SPACES 0
 
 // margin for line numbers
 #define LEFT_MARGIN " │ "
@@ -724,18 +725,37 @@ void editor_insert_char(int c)
 
 void editor_insert_newline()
 {
+   int padding = 0;
    if (E.cx == 0) {
       editor_insert_row(E.cy, "", 0);
    } else {
       erow * row = &E.row[E.cy];
-      editor_insert_row(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
+      
+      int numspaces = 0, numtabs = 0;
+      for (int i = 0; row->chars[i] == ' ' || row->chars[i] == '\t'; i++) {
+         if (row->chars[i] == ' ') numspaces++;
+         else numtabs++;
+      }
+      padding = (numtabs + (numspaces / YAR_TAB_STOP));
+      if (YAR_GENERATE_TABS_AS_SPACES == 1) padding *= YAR_TAB_STOP;
+
+      char newline[padding + row->size - E.cx + 1];
+      if (YAR_GENERATE_TABS_AS_SPACES == 1) {
+         snprintf(newline, sizeof(newline), "%*c", padding, ' ');
+      } else {
+         for (int i = 0; i < padding; i++) {
+            strcat(newline, "\t");
+         }
+      }
+      strcat(newline, &row->chars[E.cx]);
+      editor_insert_row(E.cy + 1, newline, padding + row->size - E.cx);
       row = &E.row[E.cy];
-      row->size = E.cx;
+      //row->size = padding + row->size;
       row->chars[row->size] = '\0';
       editor_update_row(row);
    }
    E.cy++;
-   E.cx = 0;
+   E.cx = padding;
 }
 
 void editor_del_char()
@@ -980,6 +1000,17 @@ void editor_process_keypress() {
    switch(c) {
       case '\r':
          editor_insert_newline();
+         break;
+      
+      case '\t':
+         if (YAR_GENERATE_TABS_AS_SPACES == 1) {
+            // spaghetti??!??!
+            for (int i = 0; i < YAR_TAB_STOP; i++) {
+               editor_insert_char(' ');
+            }
+         } else {
+            editor_insert_char('\t');
+         }
          break;
 
       case CTRL_KEY('q'):
