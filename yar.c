@@ -18,10 +18,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 #define YAR_VERSION "0.1"
-#define YAR_TAB_STOP 3
 #define YAR_QUIT_TIMES 1
-#define YAR_SHOW_LINE_NUMBERS 0
-#define YAR_GENERATE_TABS_AS_SPACES 1
 #define YAR_WELCOME_LINE_COUNT (int)(sizeof(YAR_WELCOME)/sizeof(YAR_WELCOME[0]))
 
 char YAR_WELCOME[4][80] = {
@@ -73,6 +70,10 @@ struct EditorConfig {
    time_t statusmsg_time;
    struct editor_syntax * syntax;
    struct termios orig_termios;
+
+   int tab_stop;
+   int show_line_numbers;
+   int tabs_as_spaces;
 };
 
 struct abuf {
@@ -186,10 +187,10 @@ int editor_row_cx_to_rx(erow * row, int cx) {
    int j;
    for (j = 0; j < cx; j++) {
       if (row->chars[j] == '\t')
-         rx += (YAR_TAB_STOP - 1) - (rx % YAR_TAB_STOP);
+         rx += (E.tab_stop - 1) - (rx % E.tab_stop);
       rx++;
    }
-   if (YAR_SHOW_LINE_NUMBERS)
+   if (E.show_line_numbers)
       return rx + num_digits(E.numrows) + LEFT_MARGIN_SIZE;
    return rx;
 }
@@ -199,12 +200,12 @@ int editor_row_rx_to_cx(erow * row, int rx) {
    int cx;
    for (cx = 0; cx < row->size; cx++) {
       if (row->chars[cx] == '\t')
-         cur_rx += (YAR_TAB_STOP - 1) - (cur_rx % YAR_TAB_STOP);
+         cur_rx += (E.tab_stop - 1) - (cur_rx % E.tab_stop);
       cur_rx++;
 
       if (cur_rx > rx) return cx;
    }
-   if (YAR_SHOW_LINE_NUMBERS)
+   if (E.show_line_numbers)
       return cx - num_digits(E.numrows) - LEFT_MARGIN_SIZE;
    return cx;
 }
@@ -274,7 +275,7 @@ void editor_draw_rows(struct abuf * ab) {
          int total_left_margin_size = num_digits(E.numrows) + LEFT_MARGIN_SIZE;
          char linenum[10]; // i think we can assume we prolly wont be opening million+ line files!
          int linenumlen = snprintf(linenum, sizeof(linenum), "%*d%s", num_digits(E.numrows), (E.rowoff + y + 1), LEFT_MARGIN);
-         if (YAR_SHOW_LINE_NUMBERS) {
+         if (E.show_line_numbers) {
             ab_append(ab, "\x1b[36m", 5);
             ab_append(ab, linenum, linenumlen);
             ab_append(ab, "\x1b[39m", 5);
@@ -282,7 +283,7 @@ void editor_draw_rows(struct abuf * ab) {
 
          int len = E.row[filerow].rsize - E.coloff;
          if (len < 0) len = 0;
-         if (YAR_SHOW_LINE_NUMBERS) {
+         if (E.show_line_numbers) {
             if (len > E.screencols - total_left_margin_size) 
                len = E.screencols - total_left_margin_size;
          } else {
@@ -647,13 +648,13 @@ void editor_update_row(erow * row)
       if (row->chars[j] == '\t') tabs++;
 
    free(row->render);
-   row->render = malloc(row->size + tabs * (YAR_TAB_STOP - 1) + 1);
+   row->render = malloc(row->size + tabs * (E.tab_stop - 1) + 1);
 
    int idx = 0;
    for (j = 0; j < row->size; j++) {
       if (row->chars[j] == '\t') {
          row->render[idx++] = ' ';
-         while (idx % YAR_TAB_STOP != 0) row->render[idx++] = ' ';
+         while (idx % E.tab_stop != 0) row->render[idx++] = ' ';
       } else {
          row->render[idx++] = row->chars[j];
       }
@@ -757,11 +758,11 @@ void editor_insert_newline()
          if (row->chars[i] == ' ') numspaces++;
          else numtabs++;
       }
-      padding = (numtabs + (numspaces / YAR_TAB_STOP));
-      if (YAR_GENERATE_TABS_AS_SPACES == 1) padding *= YAR_TAB_STOP;
+      padding = (numtabs + (numspaces / E.tab_stop));
+      if (E.tabs_as_spaces == 1) padding *= E.tab_stop;
 
       char newline[padding + row->size - E.cx + 1];
-      if (YAR_GENERATE_TABS_AS_SPACES == 1) {
+      if (E.tabs_as_spaces == 1) {
          snprintf(newline, sizeof(newline), "%*c", padding, ' ');
       } else {
          for (int i = 0; i < padding; i++) {
@@ -982,6 +983,13 @@ void editor_find()
    }
 }
 
+void editor_command()
+{
+   char * query = editor_prompt(": %s", NULL);
+
+   if (query) free(query);
+}
+
 void editor_move_cursor(int key) {
    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
 
@@ -1025,9 +1033,9 @@ void editor_process_keypress() {
          break;
       
       case '\t':
-         if (YAR_GENERATE_TABS_AS_SPACES == 1) {
+         if (E.tabs_as_spaces == 1) {
             // spaghetti??!??!
-            for (int i = 0; i < YAR_TAB_STOP; i++) {
+            for (int i = 0; i < E.tab_stop; i++) {
                editor_insert_char(' ');
             }
          } else {
@@ -1060,6 +1068,10 @@ void editor_process_keypress() {
 
       case CTRL_KEY('f'):
          editor_find();
+         break;
+      
+      case CTRL_KEY('/'):
+         editor_command();
          break;
 
       case BACKSPACE:
@@ -1120,6 +1132,10 @@ void init_editor() {
 
    if (get_window_size(&E.screenrows, &E.screencols) == -1) die("get_window_size");
    E.screenrows -= 2;
+
+   E.tab_stop = 3;
+   E.show_line_numbers = 1;
+   E.tabs_as_spaces = 1;
 }
 
 int main(int argc, char *argv[]) {
