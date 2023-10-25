@@ -20,7 +20,9 @@
 #define YAR_VERSION "0.1"
 #define YAR_TAB_STOP 8
 #define YAR_QUIT_TIMES 1
+#define YAR_SHOW_LINE_NUMBERS 1 
 
+// margin for line numbers
 #define LEFT_MARGIN " │ "
 #define LEFT_MARGIN_SIZE strlen(LEFT_MARGIN) - 2
 
@@ -178,7 +180,9 @@ int editor_row_cx_to_rx(erow * row, int cx) {
          rx += (YAR_TAB_STOP - 1) - (rx % YAR_TAB_STOP);
       rx++;
    }
-   return rx + num_digits(E.numrows) + LEFT_MARGIN_SIZE;
+   if (YAR_SHOW_LINE_NUMBERS)
+      return rx + num_digits(E.numrows) + LEFT_MARGIN_SIZE;
+   return rx;
 }
 
 int editor_row_rx_to_cx(erow * row, int rx) {
@@ -191,7 +195,9 @@ int editor_row_rx_to_cx(erow * row, int rx) {
 
       if (cur_rx > rx) return cx;
    }
-   return cx - num_digits(E.numrows) - LEFT_MARGIN_SIZE;
+   if (YAR_SHOW_LINE_NUMBERS)
+      return cx - num_digits(E.numrows) - LEFT_MARGIN_SIZE;
+   return cx;
 }
 
 int editor_syntax_to_color(int hl) {
@@ -248,14 +254,20 @@ void editor_draw_rows(struct abuf * ab) {
             ab_append(ab, "~", 1);
          }
       } else {
-         int size = num_digits(E.numrows) + LEFT_MARGIN_SIZE;
+         int total_left_margin_size = num_digits(E.numrows) + LEFT_MARGIN_SIZE;
          char linenum[10]; // i think we can assume we prolly wont be opening million+ line files!
          int linenumlen = snprintf(linenum, sizeof(linenum), "%*d%s", num_digits(E.numrows), (E.rowoff + y + 1), LEFT_MARGIN);
-         ab_append(ab, linenum, linenumlen);
+         if (YAR_SHOW_LINE_NUMBERS) ab_append(ab, linenum, linenumlen);
 
          int len = E.row[filerow].rsize - E.coloff;
          if (len < 0) len = 0;
-         if (len > E.screencols - size) len = E.screencols - size;
+         if (YAR_SHOW_LINE_NUMBERS) {
+            if (len > E.screencols - total_left_margin_size) 
+               len = E.screencols - total_left_margin_size;
+         } else {
+            if (len > E.screencols)
+               len = E.screencols;
+         }
          char * c = &E.row[filerow].render[E.coloff];
          unsigned char * hl = &E.row[filerow].hl[E.coloff];
          int current_color = -1;
