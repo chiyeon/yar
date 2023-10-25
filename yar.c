@@ -21,11 +21,12 @@
 #define YAR_QUIT_TIMES 1
 #define YAR_WELCOME_LINE_COUNT (int)(sizeof(YAR_WELCOME)/sizeof(YAR_WELCOME[0]))
 
-char YAR_WELCOME[4][80] = {
+char YAR_WELCOME[10][80] = {
    "Yar Text Editor -- Ver. %s",
    "Ctrl + S to Save",
    "Ctrl + F to Find",
-   "Ctrl + Q to Quit",
+   "Ctrl + / for Commands",
+   "Ctrl + Q to Quit"
 };
 
 // margin for line numbers
@@ -987,7 +988,59 @@ void editor_command()
 {
    char * query = editor_prompt(": %s", NULL);
 
-   if (query) free(query);
+   if (query) {
+      char * query_split = strtok(query, " ");
+      char cmd[10][50];
+      int num_args = 0; // includes command
+
+      while (query_split != NULL) {
+         strcpy(cmd[num_args++], query_split);
+         query_split = strtok(NULL, " ");
+      }
+
+      if (strcmp(cmd[0], "help") == 0) {
+         editor_set_status_message("Commands: help, tabstop, linenumbers, expandtab");
+      } else if (strcmp(cmd[0], "tabstop") == 0) {
+         if (num_args < 2) {
+            editor_set_status_message("Specify number of spaces in a tab!");
+            goto end;
+         }
+
+         E.tab_stop = atoi(cmd[1]);
+         editor_set_status_message("Tab stop set to %s", cmd[1]);
+      } else if (strcmp(cmd[0], "linenumbers") == 0) {
+         if (num_args < 2 ||
+            (strcmp(cmd[1], "true") != 0 && strcmp(cmd[1], "false") != 0)) {
+            editor_set_status_message("Specify true/false");
+            goto end;
+         }
+
+         E.show_line_numbers = strcmp(cmd[1], "true") == 0 ? 1 : 0;
+         editor_set_status_message("Show line numbers set to %s", cmd[1]);
+      } else if (strcmp(cmd[0], "expandtab") == 0) {
+         if (num_args < 2 ||
+            (strcmp(cmd[1], "true") != 0 && strcmp(cmd[1], "false") != 0)) {
+            editor_set_status_message("Specify true/false");
+            goto end;
+         }
+
+         E.tabs_as_spaces = strcmp(cmd[1], "true") == 0 ? 1 : 0;
+         editor_set_status_message("Expand tab set to %s", cmd[1]);
+      } else {
+         editor_set_status_message("Command not recognized! Try 'help'!");
+      }
+
+      // if (is_command(query, "tabstop", 1)) {
+      //    args = strstr(query, "tabstop ") + strlen("tabstop ");
+      //    if (args) E.tab_stop = atoi(&args[0]);
+      // } else if (is_command(query, "linenumbers", 1)) {
+      //    args = strstr(query, "linenumbers ") + strlen("linenumbers ");
+      //    E.show_line_numbers = atoi(&args[0]);
+      // }
+
+      end:
+      free(query);
+   }
 }
 
 void editor_move_cursor(int key) {
@@ -1070,7 +1123,7 @@ void editor_process_keypress() {
          editor_find();
          break;
       
-      case CTRL_KEY('/'):
+      case CTRL_KEY('?'):
          editor_command();
          break;
 
