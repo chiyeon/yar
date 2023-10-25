@@ -21,7 +21,7 @@
 #define YAR_TAB_STOP 3
 #define YAR_QUIT_TIMES 1
 #define YAR_SHOW_LINE_NUMBERS 0
-#define YAR_GENERATE_TABS_AS_SPACES 0
+#define YAR_GENERATE_TABS_AS_SPACES 1
 
 // margin for line numbers
 #define LEFT_MARGIN " │ "
@@ -408,7 +408,12 @@ int editor_read_key() {
                   case '8': return END_KEY;
                }
             }
-         } else {
+         } else if (seq[1] == '<') {	
+				switch (seq[3]) {	
+					case '5': return ARROW_UP;	
+					case '4': return ARROW_DOWN;	
+				}	
+			} else {
             switch (seq[1]) {
                case 'A': return ARROW_UP;
                case 'B': return ARROW_DOWN;
@@ -748,9 +753,10 @@ void editor_insert_newline()
          }
       }
       strcat(newline, &row->chars[E.cx]);
+      newline[padding + row->size - E.cx] = '\0';
       editor_insert_row(E.cy + 1, newline, padding + row->size - E.cx);
       row = &E.row[E.cy];
-      //row->size = padding + row->size;
+      row->size = E.cx;
       row->chars[row->size] = '\0';
       editor_update_row(row);
    }
