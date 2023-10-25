@@ -504,7 +504,7 @@ void editor_update_syntax(erow * row)
 
       if (mcs_len && mce_len && !in_string) {
          if (in_comment) {
-            row->hl[i] == HL_MLCOMMENT;
+            row->hl[i] = HL_MLCOMMENT;
             if (!strncmp(&row->render[i], mce, mce_len)) {
                memset(&row->hl[i], HL_MLCOMMENT, mce_len);
                i += mce_len;
