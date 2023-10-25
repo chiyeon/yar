@@ -1106,7 +1106,7 @@ void editor_process_keypress() {
 
       case CTRL_KEY('q'):
          if (E.dirty && quit_times > 0) {
-            editor_set_status_message("Warning: File has unsaved changes. Press Ctrl -Q again to quit.", quit_times);
+            editor_set_status_message("Warning: File has unsaved changes. Press again to quit.", quit_times);
             quit_times--;
             return;
          }
