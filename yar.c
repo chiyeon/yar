@@ -15,6 +15,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "syntax.c"
+
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 #define YAR_VERSION "0.1"
@@ -32,19 +34,6 @@ char YAR_WELCOME[10][80] = {
 // margin for line numbers
 #define LEFT_MARGIN " │ "
 #define LEFT_MARGIN_SIZE strlen(LEFT_MARGIN) - 2
-
-#define HL_HIGHLIGHT_NUMBERS (1<<0)
-#define HL_HIGHLIGHT_STRINGS (1<<1)
-
-struct editor_syntax {
-   char * filetype;
-   char ** filematch;
-   char ** keywords;
-   char * singleline_comment_start;
-   char * multiline_comment_start;
-   char * multiline_comment_end;
-   int flags;
-};
 
 typedef struct erow {
    int idx;
@@ -131,29 +120,6 @@ int num_digits(int num)
 }
 
 struct EditorConfig E;
-
-char * C_HL_extensions[] = { ".c", ".h", ".cpp", ".hpp", NULL };
-char * C_HL_keywords[] = {
-   "switch", "if", "while", "for", "break", "continue", "return", "else", "struct",
-   "union", "typedef", "static", "enum", "class", "case", "true", "false", "auto",
-   "const", "default", "do", "enum", "extern", "public", "private", "sizeof", 
-   "union", "volatile", "#define", "#include", 
-
-   "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
-   "void|", "bool|", NULL
-};
-
-struct editor_syntax HLDB[] = {
-   {
-      "c",
-      C_HL_extensions,
-      C_HL_keywords,
-      "//", "/*", "*/",
-      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
-   }
-};
-
-#define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
 void die(const char * s)
 {
