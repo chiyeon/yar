@@ -1006,8 +1006,16 @@ void editor_command()
             goto end;
          }
 
+         int arglen = strlen(cmd[1]);
+         for (int i = 0; i < arglen; i++) {
+            if (!isdigit(cmd[1][i])) {
+               editor_set_status_message("Input a number!");
+               goto end;
+            }
+         }
+
          E.tab_stop = atoi(cmd[1]);
-         editor_set_status_message("Tab stop set to %s", cmd[1]);
+         editor_set_status_message("Tab stop set to %c", cmd[1][0]);
       } else if (strcmp(cmd[0], "linenumbers") == 0) {
          if (num_args < 2 ||
             (strcmp(cmd[1], "true") != 0 && strcmp(cmd[1], "false") != 0)) {
