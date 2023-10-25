@@ -22,6 +22,14 @@
 #define YAR_QUIT_TIMES 1
 #define YAR_SHOW_LINE_NUMBERS 0
 #define YAR_GENERATE_TABS_AS_SPACES 1
+#define YAR_WELCOME_LINE_COUNT (int)(sizeof(YAR_WELCOME)/sizeof(YAR_WELCOME[0]))
+
+char YAR_WELCOME[4][80] = {
+   "Yar Text Editor -- Ver. %s",
+   "Ctrl + S to Save",
+   "Ctrl + F to Find",
+   "Ctrl + Q to Quit",
+};
 
 // margin for line numbers
 #define LEFT_MARGIN " │ "
@@ -125,10 +133,10 @@ struct EditorConfig E;
 char * C_HL_extensions[] = { ".c", ".h", ".cpp", ".hpp", NULL };
 char * C_HL_keywords[] = {
    "switch", "if", "while", "for", "break", "continue", "return", "else", "struct",
-   "union", "typedef", "static", "enum", "class", "case",
+   "union", "typedef", "static", "enum", "class", "case", "true", "false"
 
    "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
-   "void|", NULL
+   "void|", "bool|", NULL
 };
 
 struct editor_syntax HLDB[] = {
@@ -237,20 +245,28 @@ void editor_scroll()
 
 void editor_draw_rows(struct abuf * ab) {
    int y;
+   int welcome_index = 0;
    for (y = 0; y < E.screenrows; ++y) {
       int filerow = y + E.rowoff; 
       if (filerow >= E.numrows) {
-         if (E.numrows == 0 && y == E.screenrows / 3) {
-            char welcome[80];
-            int welcomelen = snprintf(welcome, sizeof(welcome), "Yar Text Editor -- Ver. %s", YAR_VERSION);
-            if (welcomelen > E.screencols) welcomelen = E.screencols;
-            int padding = (E.screencols - welcomelen) / 2;
+         if (E.numrows == 0 && y >= E.screenrows / 3 && y < (E.screenrows) / 3 + YAR_WELCOME_LINE_COUNT) {
+            char message[80];
+            strcpy(message, YAR_WELCOME[welcome_index++]);
+            int messagelen = strlen(message);
+
+            // special case for line 1 (version)
+            if (welcome_index == 1) { 
+               messagelen = snprintf(message, sizeof(message), YAR_WELCOME[welcome_index - 1], YAR_VERSION);
+            }
+
+            if (messagelen > E.screencols) messagelen = E.screencols;
+            int padding = (E.screencols - messagelen) / 2;
             if (padding) {
                ab_append(ab, "~", 1);
                padding--;
             }
             while (padding--) ab_append(ab, " ", 1);
-            ab_append(ab, welcome, welcomelen);
+            ab_append(ab, message, messagelen);
          } else {
             ab_append(ab, "~", 1);
          }
@@ -1113,8 +1129,6 @@ int main(int argc, char *argv[]) {
    if (argc >= 2) {
       editor_open(argv[1]);
    }
-
-   editor_set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl - F = find");
 
    for (;;) {
       editor_refresh_screen();
