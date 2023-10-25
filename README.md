@@ -1,5 +1,5 @@
 # yar
-![Preview](preview.png)
+![Preview](preview.webp)
 
 Yar is a simple terminal text editor written in C based on the [kilo tutorial](https://viewsourcecode.org/snaptoken/kilo/).
 
