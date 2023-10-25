@@ -21,6 +21,9 @@
 #define YAR_TAB_STOP 8
 #define YAR_QUIT_TIMES 1
 
+#define LEFT_MARGIN " │ "
+#define LEFT_MARGIN_SIZE strlen(LEFT_MARGIN) - 2
+
 #define HL_HIGHLIGHT_NUMBERS (1<<0)
 #define HL_HIGHLIGHT_STRINGS (1<<1)
 
@@ -103,6 +106,17 @@ void ab_free(struct abuf * ab) {
    free(ab->b);
 }
 
+int num_digits(int num)
+{
+   int count = 0;
+   while (num != 0) {
+      num = num / 10;
+      count++;
+   }
+
+   return count;
+}
+
 struct EditorConfig E;
 
 char * C_HL_extensions[] = { ".c", ".h", ".cpp", ".hpp", NULL };
@@ -164,7 +178,7 @@ int editor_row_cx_to_rx(erow * row, int cx) {
          rx += (YAR_TAB_STOP - 1) - (rx % YAR_TAB_STOP);
       rx++;
    }
-   return rx;
+   return rx + num_digits(E.numrows) + LEFT_MARGIN_SIZE;
 }
 
 int editor_row_rx_to_cx(erow * row, int rx) {
@@ -177,7 +191,7 @@ int editor_row_rx_to_cx(erow * row, int rx) {
 
       if (cur_rx > rx) return cx;
    }
-   return cx;
+   return cx - num_digits(E.numrows) - LEFT_MARGIN_SIZE;
 }
 
 int editor_syntax_to_color(int hl) {
@@ -217,7 +231,7 @@ void editor_scroll()
 void editor_draw_rows(struct abuf * ab) {
    int y;
    for (y = 0; y < E.screenrows; ++y) {
-      int filerow = y + E.rowoff;
+      int filerow = y + E.rowoff; 
       if (filerow >= E.numrows) {
          if (E.numrows == 0 && y == E.screenrows / 3) {
             char welcome[80];
@@ -234,9 +248,14 @@ void editor_draw_rows(struct abuf * ab) {
             ab_append(ab, "~", 1);
          }
       } else {
+         int size = num_digits(E.numrows) + LEFT_MARGIN_SIZE;
+         char linenum[10]; // i think we can assume we prolly wont be opening million+ line files!
+         int linenumlen = snprintf(linenum, sizeof(linenum), "%*d%s", num_digits(E.numrows), (E.rowoff + y + 1), LEFT_MARGIN);
+         ab_append(ab, linenum, linenumlen);
+
          int len = E.row[filerow].rsize - E.coloff;
          if (len < 0) len = 0;
-         if (len > E.screencols) len = E.screencols;
+         if (len > E.screencols - size) len = E.screencols - size;
          char * c = &E.row[filerow].render[E.coloff];
          unsigned char * hl = &E.row[filerow].hl[E.coloff];
          int current_color = -1;
