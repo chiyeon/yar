@@ -257,7 +257,11 @@ void editor_draw_rows(struct abuf * ab) {
          int total_left_margin_size = num_digits(E.numrows) + LEFT_MARGIN_SIZE;
          char linenum[10]; // i think we can assume we prolly wont be opening million+ line files!
          int linenumlen = snprintf(linenum, sizeof(linenum), "%*d%s", num_digits(E.numrows), (E.rowoff + y + 1), LEFT_MARGIN);
-         if (YAR_SHOW_LINE_NUMBERS) ab_append(ab, linenum, linenumlen);
+         if (YAR_SHOW_LINE_NUMBERS) {
+            ab_append(ab, "\x1b[36m", 5);
+            ab_append(ab, linenum, linenumlen);
+            ab_append(ab, "\x1b[39m", 5);
+         }
 
          int len = E.row[filerow].rsize - E.coloff;
          if (len < 0) len = 0;
