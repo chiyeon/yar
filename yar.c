@@ -19,7 +19,7 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
-#define YAR_VERSION "0.1"
+#define YAR_VERSION "0.2"
 #define YAR_QUIT_TIMES 1
 #define YAR_WELCOME_LINE_COUNT (int)(sizeof(YAR_WELCOME)/sizeof(YAR_WELCOME[0]))
 
@@ -1064,7 +1064,8 @@ void editor_process_keypress() {
       case '\t':
          if (E.tabs_as_spaces == 1) {
             // spaghetti??!??!
-            for (int i = 0; i < E.tab_stop; i++) {
+            int start_x = E.cx;
+            for (int i = 0; i < E.tab_stop - (start_x % E.tab_stop); i++) {
                editor_insert_char(' ');
             }
          } else {
@@ -1136,7 +1137,7 @@ void editor_process_keypress() {
       case CTRL_KEY('l'):
       case '\x1b':
          break;
-
+      
       default:
          editor_insert_char(c);
          break;
