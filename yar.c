@@ -19,21 +19,29 @@
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
-#define YAR_VERSION "0.2"
+#define YAR_VERSION "0.3"
 #define YAR_QUIT_TIMES 1
 #define YAR_WELCOME_LINE_COUNT (int)(sizeof(YAR_WELCOME)/sizeof(YAR_WELCOME[0]))
 
 char YAR_WELCOME[10][80] = {
    "Yar Text Editor -- Ver. %s",
-   "Ctrl + S to Save",
-   "Ctrl + F to Find",
-   "Ctrl + / for Commands",
-   "Ctrl + Q to Quit"
+   "<i> for editing mode",
+   "<ESC> for reading mode",
+   "<CTRL+/> for command mode",
+   "",
+   "<CTRL+s> to Save",
+   "<CTRL+f> to Find",
+   "<CTRL+q> to Quit"
 };
 
 // margin for line numbers
 #define LEFT_MARGIN " │ "
 #define LEFT_MARGIN_SIZE strlen(LEFT_MARGIN) - 2
+
+// modes
+#define MODE_READING 0
+#define MODE_EDITING 1
+#define MODE_COMMAND 2
 
 typedef struct erow {
    int idx;
@@ -54,6 +62,8 @@ struct EditorConfig {
    int screencols;
    int numrows;
    erow * row;
+   int mode;
+   int mode_previous;
    int dirty;
    char * filename;
    char statusmsg[80];
@@ -81,7 +91,10 @@ enum editor_key {
    PAGE_DOWN,
    HOME_KEY,
    END_KEY,
-   DEL_KEY
+   DEL_KEY,
+   ENABLE_MODE_READING = 27,
+   ENABLE_MODE_EDITING = 105,
+   READING_ENABLE_COMMANDS = 58,
 };
 
 enum editor_highlight {
@@ -299,12 +312,27 @@ void editor_draw_rows(struct abuf * ab) {
    }
 }
 
+char * editor_mode_as_str()
+{
+   switch (E.mode) {
+      case MODE_EDITING:
+         return "EDITING";
+      case MODE_READING:
+         return "READING";
+      case MODE_COMMAND:
+         return "COMMAND";
+      default:
+         return "ERROR";
+   }
+}
+
 void editor_draw_status_bar(struct abuf * ab) 
 {
    ab_append(ab, "\x1b[7m", 4);
 
    char status[80], rstatus[80];
-   int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
+   int len = snprintf(status, sizeof(status), " %s%s%.20s - %d lines %s",
+      editor_mode_as_str(), LEFT_MARGIN,
       E.filename ? E.filename : "[No Name]", E.numrows,
       E.dirty ? "(modified)" : "");
    int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d",
@@ -787,6 +815,31 @@ char * editor_rows_to_string(int * buflen)
    return buf;
 }
 
+void editor_force_quit() {
+   write(STDOUT_FILENO, "\x1b[2J", 4);
+   write(STDOUT_FILENO, "\x1b[H", 3);
+   exit(0);
+}
+
+void editor_quit(int * quit_times) {
+   if (E.dirty) {
+      // if our file is dirty we have 2 options
+      // one, we tried to quit with CTRL+Q. then quit_times will be valid. warn to press again
+      // otherwise, we did :q and we should advise to save or q!
+      if (quit_times != NULL) {
+         if (*quit_times > 0) {
+            editor_set_status_message("WARNING: Unsaved changes. Press again to force quit.");
+            *quit_times = *quit_times - 1;
+            return;
+         }
+      } else {
+         editor_set_status_message("WARNING: Unsaved changes. Use ':wq' to save & quit or ':q!' to force quit.");
+         return;
+      }
+   }
+   editor_force_quit();
+}
+
 void editor_open(char * filename)
 {
    free(E.filename);
@@ -954,8 +1007,13 @@ void editor_find()
 
 void editor_command()
 {
+   E.mode_previous = E.mode;
+   E.mode = MODE_COMMAND;
+
+   /* spaghetti makes the world go 'round */
    char * query = editor_prompt(": %s", NULL);
 
+   E.mode = E.mode_previous;
    if (query) {
       char * query_split = strtok(query, " ");
       char cmd[10][50];
@@ -967,7 +1025,7 @@ void editor_command()
       }
 
       if (strcmp(cmd[0], "help") == 0) {
-         editor_set_status_message("Commands: help, tabstop, linenumbers, expandtab");
+         editor_set_status_message("Commands: help, tabstop, linenumbers, expandtab, write, quit");
       } else if (strcmp(cmd[0], "tabstop") == 0) {
          if (num_args < 2) {
             editor_set_status_message("Specify number of spaces in a tab!");
@@ -1002,6 +1060,19 @@ void editor_command()
 
          E.tabs_as_spaces = strcmp(cmd[1], "true") == 0 ? 1 : 0;
          editor_set_status_message("Expand tab set to %s", cmd[1]);
+      } else if (strcmp(cmd[0], "quit") == 0 || strcmp(cmd[0], "q") == 0) {
+         editor_quit(NULL);
+      } else if (strcmp(cmd[0], "quit!") == 0 || strcmp(cmd[0], "q!") == 0) {
+         editor_force_quit();
+      } else if (strcmp(cmd[0], "write") == 0 ||
+                  strcmp(cmd[0], "w") == 0 ||
+                  strcmp(cmd[0], "save") == 0 ||
+                  strcmp(cmd[0], "s") == 0) {
+         editor_save();
+      } else if (strcmp(cmd[0], "writequit") == 0 ||
+                  strcmp(cmd[0], "wq") == 0) {
+         editor_save();
+         editor_quit(NULL);
       } else {
          editor_set_status_message("Command not recognized! Try 'help'!");
       }
@@ -1053,35 +1124,14 @@ void editor_move_cursor(int key) {
 }
 
 void editor_process_keypress() {
-   static int quit_times = YAR_QUIT_TIMES;
    int c = editor_read_key();
+   static int quit_times = YAR_QUIT_TIMES;
 
    switch(c) {
-      case '\r':
-         editor_insert_newline();
-         break;
-      
-      case '\t':
-         if (E.tabs_as_spaces == 1) {
-            // spaghetti??!??!
-            int start_x = E.cx;
-            for (int i = 0; i < E.tab_stop - (start_x % E.tab_stop); i++) {
-               editor_insert_char(' ');
-            }
-         } else {
-            editor_insert_char('\t');
-         }
-         break;
-
+      /* first process "general" mode-agnostic keypresses */
       case CTRL_KEY('q'):
-         if (E.dirty && quit_times > 0) {
-            editor_set_status_message("Warning: File has unsaved changes. Press again to quit.", quit_times);
-            quit_times--;
-            return;
-         }
-         write(STDOUT_FILENO, "\x1b[2J", 4);
-         write(STDOUT_FILENO, "\x1b[H", 3);
-         exit(0);
+         editor_quit(&quit_times);
+         return;
          break;
 
       case CTRL_KEY('s'):
@@ -1102,13 +1152,6 @@ void editor_process_keypress() {
       
       case CTRL_KEY('?'):
          editor_command();
-         break;
-
-      case BACKSPACE:
-      case CTRL_KEY('h'):
-      case DEL_KEY:
-         if (c == DEL_KEY) editor_move_cursor(ARROW_RIGHT);
-         editor_del_char();
          break;
 
       case PAGE_UP:
@@ -1134,13 +1177,70 @@ void editor_process_keypress() {
          editor_move_cursor(c);
          break;
 
-      case CTRL_KEY('l'):
-      case '\x1b':
+      /* handle editing/reading modes differently */
+      // think of a better way to do this...
+      case '\r':
+         if (E.mode == MODE_EDITING) {
+            editor_insert_newline();
+         }
          break;
       
-      default:
-         editor_insert_char(c);
+      case '\t':
+         if (E.mode == MODE_EDITING) {
+            if (E.tabs_as_spaces == 1) {
+               // spaghetti??!??!
+               int start_x = E.cx;
+               for (int i = 0; i < E.tab_stop - (start_x % E.tab_stop); i++) {
+                  editor_insert_char(' ');
+               }
+            } else {
+               editor_insert_char('\t');
+            }
+         }
          break;
+      
+      case BACKSPACE:
+      case CTRL_KEY('h'):
+      case DEL_KEY:
+         if (E.mode == MODE_EDITING) {
+            if (c == DEL_KEY) editor_move_cursor(ARROW_RIGHT);
+            editor_del_char();
+            }
+         break;
+
+      case ENABLE_MODE_EDITING:
+         if (E.mode == MODE_READING) {
+            E.mode = MODE_EDITING;
+         } else {
+            editor_insert_char(c);
+         }
+         break;
+      
+      case ENABLE_MODE_READING:
+         if (E.mode == MODE_EDITING) {
+            E.mode = MODE_READING;
+         }
+         break;
+
+      /* enable commands mode with <shift, ;> if reading */
+      case READING_ENABLE_COMMANDS:
+         if (E.mode == MODE_READING) {
+            editor_command();
+         } else {
+            editor_insert_char(c);
+         }
+         break;
+      
+      case CTRL_KEY('l'):
+      /* case '\x1b': */
+         break;
+
+      default:
+         if (E.mode == MODE_EDITING) {
+            editor_insert_char(c);
+            break;
+         }
+      
    }
 
    quit_times = YAR_QUIT_TIMES; 
@@ -1154,6 +1254,7 @@ void init_editor() {
    E.coloff = 0;
    E.numrows = 0;
    E.row = NULL;
+   E.mode = MODE_READING;
    E.dirty = 0;
    E.filename = NULL;
    E.statusmsg[0] = '\0';
